@@ -1,7 +1,9 @@
 import argparse
+import time
 from tiktok_uploader import tiktok, Video
 from tiktok_uploader.basics import eprint
 from tiktok_uploader.Config import Config
+from video_manager import VideoManager
 import sys, os
 
 if __name__ == "__main__":
@@ -17,9 +19,9 @@ if __name__ == "__main__":
     # Upload subcommand.
     upload_parser = subparsers.add_parser("upload", help="Upload video on TikTok")
     upload_parser.add_argument("-u", "--users", help="Enter cookie name from login", required=True)
-    upload_parser.add_argument("-v", "--video", help="Path to video file")
+    upload_parser.add_argument("-v", "--video", help="Path to video file (optional - will auto-select if not provided)")
     upload_parser.add_argument("-yt", "--youtube", help="Enter Youtube URL")
-    upload_parser.add_argument("-t", "--title", help="Title of the video", required=True)
+    upload_parser.add_argument("-t", "--title", help="Title of the video (optional - will generate if not provided)")
     upload_parser.add_argument("-sc", "--schedule", type=int, default=0, help="Schedule time in seconds")
     upload_parser.add_argument("-ct", "--comment", type=int, default=1, choices=[0, 1])
     upload_parser.add_argument("-d", "--duet", type=int, default=0, choices=[0, 1])
@@ -51,29 +53,61 @@ if __name__ == "__main__":
         if not hasattr(args, 'users') or args.users is None:
             parser.error("The 'cookie' argument is required for the 'upload' subcommand.")
         
-        # Check if source exists,
-        if args.video is None and args.youtube is None:
-            eprint("No source provided. Use -v or -yt to provide video source.")
-            sys.exit(1)
+        video_manager = VideoManager()
+        
+        # Handle manual video/YouTube specification
         if args.video and args.youtube:
             eprint("Both -v and -yt flags cannot be used together.")
             sys.exit(1)
-
-        if args.youtube:
-            video_obj = Video(args.youtube, args.title)
-            video_obj.is_valid_file_format()
-            video = video_obj.source_ref
-            args.video = video
+        
+        if args.video or args.youtube:
+            # Manual specification - use existing logic
+            if args.youtube:
+                if not args.title:
+                    eprint("Title is required when specifying a YouTube URL manually.")
+                    sys.exit(1)
+                video_obj = Video(args.youtube, args.title)
+                video_obj.is_valid_file_format()
+                video = video_obj.source_ref
+                args.video = video
+            else:
+                if not os.path.exists(os.path.join(os.getcwd(), Config.get().videos_dir, args.video)):
+                    print("[-] Video does not exist")
+                    print("Video Names Available: ")
+                    video_dir = os.path.join(os.getcwd(), Config.get().videos_dir)
+                    for name in os.listdir(video_dir):
+                        print(f'[-] {name}')
+                    sys.exit(1)
+                if not args.title:
+                    eprint("Title is required when specifying a video file manually.")
+                    sys.exit(1)
+            
+            # Upload the manually specified video
+            success = tiktok.upload_video(args.users, args.video, args.title, args.schedule, args.comment, args.duet, args.stitch, args.visibility, args.brandorganic, args.brandcontent, args.ailabel, args.proxy)
         else:
-            if not os.path.exists(os.path.join(os.getcwd(), Config.get().videos_dir, args.video)) and args.video:
-                print("[-] Video does not exist")
-                print("Video Names Available: ")
-                video_dir = os.path.join(os.getcwd(), Config.get().videos_dir)
-                for name in os.listdir(video_dir):
-                    print(f'[-] {name}')
+            # Automatic mode - use video manager
+            print("[+] Auto-selecting video for upload...")
+            video_source, video_id, is_local = video_manager.get_next_video_for_upload()
+            
+            if not video_source:
+                eprint("[-] No videos available for upload (no local MP4s and no new YouTube shorts found)")
                 sys.exit(1)
-
-        tiktok.upload_video(args.users, args.video,  args.title, args.schedule, args.comment, args.duet, args.stitch, args.visibility, args.brandorganic, args.brandcontent, args.ailabel, args.proxy)
+            
+            # Generate title if not provided
+            title = args.title if args.title else f"Auto Upload {int(time.time())}"
+            
+            if is_local:
+                print(f"[+] Uploading local file: {video_source}")
+                success = tiktok.upload_video(args.users, video_source, title, args.schedule, args.comment, args.duet, args.stitch, args.visibility, args.brandorganic, args.brandcontent, args.ailabel, args.proxy)
+            else:
+                print(f"[+] Uploading YouTube short: {video_source}")
+                success = tiktok.upload_video(args.users, video_source, title, args.schedule, args.comment, args.duet, args.stitch, args.visibility, args.brandorganic, args.brandcontent, args.ailabel, args.proxy)
+            
+            # Mark as uploaded and clean up if successful
+            if success:
+                video_manager.mark_video_as_uploaded(video_source, video_id, is_local)
+            else:
+                eprint("[-] Upload failed, not cleaning up files")
 
     elif args.subcommand == "show":
         # if flag is c then show cookie names

@@ -47,6 +47,18 @@ def login(login_name: str):
 
 # Local Code...
 def upload_video(session_user, video, title, schedule_time=0, allow_comment=1, allow_duet=0, allow_stitch=0, visibility_type=0, brand_organic_type=0, branded_content_type=0, ai_label=0, proxy=None):
+	"""
+	Upload a video to TikTok
+	
+	Args:
+		session_user: Username for the saved session
+		video: Video file path or YouTube URL
+		title: Video title
+		... (other parameters)
+	
+	Returns:
+		bool: True if upload was successful, False otherwise
+	"""
 	try:
 		user_agent = UserAgent().random
 	except FakeUserAgentError as e:
@@ -326,7 +338,7 @@ def upload_video(session_user, video, title, schedule_time=0, allow_comment=1, a
 		if r.json()["status_code"] == 0:
 			print(f"Published successfully {'| Scheduled for ' + str(schedule_time) if schedule_time else ''}")
 			uploaded = True
-			break
+			return True
 		else:
 			print("[-] Publish failed to Tiktok, trying again...")
 			printError(url, r)
@@ -344,7 +356,8 @@ def upload_video(session_user, video, title, schedule_time=0, allow_comment=1, a
 		# 	time.sleep(1.5)  # wait 1.5 seconds before asking again.
 	if not uploaded:
 		print("[-] Could not upload video")
-		return False
+	
+	return uploaded
 	# Check if video uploaded successfully (Tiktok has changed endpoint for this)
 	# url = f"https://www.tiktok.com/api/v1/web/project/list/?aid=1988"
 	#
