@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YT-to-TikTok Automation Dashboard</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .status-bar {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 15px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+        }
+
+        .status-item {
+            text-align: center;
+            color: white;
+        }
+
+        .status-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .card h3 {
+            margin-bottom: 20px;
+            color: #333;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .button.danger {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+        }
+
+        .button.success {
+            background: linear-gradient(135deg, #00b894 0%, #00a085 100%);
+        }
+
+        .input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            margin: 10px 0;
+            transition: border-color 0.3s ease;
+        }
+
+        .input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .file-drop-zone {
+            border: 2px dashed #667eea;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .file-drop-zone:hover {
+            background: rgba(102, 126, 234, 0.2);
+            transform: scale(1.02);
+        }
+
+        .file-drop-zone.drag-over {
+            background: rgba(102, 126, 234, 0.3);
+            border-color: #764ba2;
+        }
+
+        .logs-container {
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+            border-radius: 10px;
+            height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 3px;
+        }
+
+        .log-info {
+            color: #00ff00;
+        }
+
+        .log-error {
+            color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.1);
+        }
+
+        .log-warning {
+            color: #ffa500;
+        }
+
+        .file-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin: 5px 0;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .file-info {
+            flex: 1;
+        }
+
+        .file-name {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .file-size {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .indicator.online {
+            background: #00b894;
+            box-shadow: 0 0 10px rgba(0, 184, 148, 0.5);
+        }
+
+        .indicator.offline {
+            background: #ff6b6b;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .status-bar {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .status-item {
+                margin: 10px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>YT-to-TikTok Automation Dashboard</h1>
+            <p>Shared workspace for video automation and uploads</p>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-label">System Status</div>
+                <div class="status-value" id="system-status">
+                    <span class="indicator offline" id="status-indicator"></span>
+                    <span id="status-text">Offline</span>
+                </div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Current User</div>
+                <div class="status-value" id="user-status">Not Set</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Videos Available</div>
+                <div class="status-value" id="upload-count">0</div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <!-- User Management Card -->
+            <div class="card">
+                <h3>👤 User Management</h3>
+                <p>Login to TikTok account:</p>
+                <input type="text" id="username-input" class="input" placeholder="Enter username to save cookies as...">
+                <button class="button" onclick="loginUser()">Login to TikTok</button>
+                <div id="login-message" style="margin-top: 10px;"></div>
+            </div>
+
+            <!-- File Upload Card -->
+            <div class="card">
+                <h3>📁 Video Upload</h3>
+                <div class="file-drop-zone" onclick="document.getElementById('file-input').click()">
+                    <p>📹 Click here or drag & drop video files</p>
+                    <p>Maximum file size: 100MB per video</p>
+                </div>
+                <input type="file" id="file-input" multiple accept="video/*" style="display: none;" onchange="handleFileSelect(this.files)">
+                <div id="upload-progress" style="display: none;">
+                    <div class="progress">
+                        <div class="progress-bar" id="progress-bar"></div>
+                    </div>
+                    <div id="upload-status">Uploading...</div>
+                </div>
+            </div>
+
+            <!-- TikTok Upload Card -->
+            <div class="card">
+                <h3>🚀 TikTok Upload</h3>
+                <p>Upload videos to TikTok:</p>
+                <select id="video-select" class="input">
+                    <option value="">Select a video...</option>
+                </select>
+                <input type="text" id="title-input" class="input" placeholder="Enter video title...">
+                <select id="user-select" class="input">
+                    <option value="">Select user...</option>
+                </select>
+                <button class="button success" onclick="uploadToTikTok()">Upload to TikTok</button>
+                <div id="upload-message" style="margin-top: 10px;"></div>
+            </div>
+
+            <!-- Uploaded Files Card -->
+            <div class="card">
+                <h3>📂 Available Videos</h3>
+                <button class="button" onclick="refreshFileList()">Refresh List</button>
+                <div id="file-list" class="file-list">
+                    <!-- File list will be populated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs Card (Full Width) -->
+        <div class="card">
+            <h3>📝 System Logs</h3>
+            <div class="logs-container" id="logs-container">
+                <div class="log-entry log-info">System initialized. Waiting for connection...</div>
+            </div>
+            <button class="button" onclick="clearLogs()" style="margin-top: 10px;">Clear Logs</button>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Socket.IO connection
+        const socket = io();
+        
+        let currentUser = null;
+        let availableUsers = [];
+
+        // Socket event handlers
+        socket.on('connect', () => {
+            addLog('info', 'Connected to server');
+            loadStatus();
+        });
+
+        socket.on('disconnect', () => {
+            addLog('error', 'Disconnected from server');
+        });
+
+        socket.on('status', (data) => {
+            updateStatus(data);
+        });
+
+        socket.on('log', (logEntry) => {
+            displayLog(logEntry);
+        });
+
+        socket.on('userLoggedIn', (data) => {
+            addLog('info', `User ${data.username} logged in successfully`);
+            currentUser = data.username;
+            updateStatus({ currentUser: data.username });
+            loadStatus();
+        });
+
+        socket.on('videoUploaded', (data) => {
+            addLog('info', `Video uploaded successfully: ${data.title}`);
+        });
+
+        // File drag and drop handlers
+        const dropZone = document.querySelector('.file-drop-zone');
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-over');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            const files = e.dataTransfer.files;
+            handleFileSelect(files);
+        });
+
+        // Functions
+        function updateStatus(data) {
+            if (data.currentUser !== undefined) {
+                currentUser = data.currentUser;
+                document.getElementById('user-status').textContent = data.currentUser || 'Not Set';
+            }
+
+            if (data.availableUsers !== undefined) {
+                availableUsers = data.availableUsers;
+                updateUserSelect();
+            }
+
+            if (data.uploadsCount !== undefined) {
+                document.getElementById('upload-count').textContent = data.uploadsCount;
+            }
+
+            // Update indicator
+            const indicator = document.getElementById('status-indicator');
+            const statusText = document.getElementById('status-text');
+            
+            if (currentUser) {
+                indicator.className = 'indicator online';
+                statusText.textContent = 'Ready';
+            } else {
+                indicator.className = 'indicator offline';
+                statusText.textContent = 'No User';
+            }
+        }
+
+        function updateUserSelect() {
+            const userSelect = document.getElementById('user-select');
+            userSelect.innerHTML = '<option value="">Select user...</option>';
+            
+            availableUsers.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user;
+                option.textContent = user;
+                userSelect.appendChild(option);
+            });
+        }
+
+        function addLog(level, message) {
+            const logEntry = {
+                timestamp: new Date().toISOString(),
+                level: level,
+                message: message
+            };
+            displayLog(logEntry);
+        }
+
+        function displayLog(logEntry) {
+            const logsContainer = document.getElementById('logs-container');
+            const logElement = document.createElement('div');
+            logElement.className = `log-entry log-${logEntry.level}`;
+            
+            const timestamp = new Date(logEntry.timestamp).toLocaleTimeString();
+            logElement.textContent = `[${timestamp}] ${logEntry.message}`;
+            
+            logsContainer.appendChild(logElement);
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+
+        function clearLogs() {
+            document.getElementById('logs-container').innerHTML = '';
+        }
+
+        async function loginUser() {
+            const username = document.getElementById('username-input').value.trim();
+            const messageDiv = document.getElementById('login-message');
+            
+            if (!username) {
+                messageDiv.innerHTML = '<span style="color: red;">Please enter a username</span>';
+                return;
+            }
+
+            try {
+                messageDiv.innerHTML = '<span style="color: blue;">Logging in... This will open TikTok login page.</span>';
+                
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    messageDiv.innerHTML = '<span style="color: green;">Login initiated! Check the logs for progress.</span>';
+                    document.getElementById('username-input').value = '';
+                } else {
+                    messageDiv.innerHTML = `<span style="color: red;">Error: ${result.error}</span>`;
+                }
+            } catch (error) {
+                messageDiv.innerHTML = `<span style="color: red;">Network error: ${error.message}</span>`;
+            }
+        }
+
+        async function handleFileSelect(files) {
+            if (!files || files.length === 0) return;
+
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append('videos', files[i]);
+            }
+
+            const progressDiv = document.getElementById('upload-progress');
+            const statusDiv = document.getElementById('upload-status');
+            
+            progressDiv.style.display = 'block';
+            statusDiv.textContent = 'Uploading...';
+
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    statusDiv.innerHTML = `<span style="color: green;">${result.message}</span>`;
+                    refreshFileList();
+                    loadStatus();
+                } else {
+                    statusDiv.innerHTML = `<span style="color: red;">Error: ${result.error}</span>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<span style="color: red;">Upload failed: ${error.message}</span>`;
+            } finally {
+                setTimeout(() => {
+                    progressDiv.style.display = 'none';
+                }, 3000);
+            }
+        }
+
+        async function uploadToTikTok() {
+            const videoPath = document.getElementById('video-select').value;
+            const title = document.getElementById('title-input').value.trim();
+            const username = document.getElementById('user-select').value;
+            const messageDiv = document.getElementById('upload-message');
+
+            if (!videoPath || !title || !username) {
+                messageDiv.innerHTML = '<span style="color: red;">Please select video, enter title, and select user</span>';
+                return;
+            }
+
+            try {
+                messageDiv.innerHTML = '<span style="color: blue;">Starting TikTok upload...</span>';
+                
+                const response = await fetch('/api/tiktok-upload', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ videoPath, title, username })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    messageDiv.innerHTML = '<span style="color: green;">Upload started! Check logs for progress.</span>';
+                    document.getElementById('title-input').value = '';
+                } else {
+                    messageDiv.innerHTML = `<span style="color: red;">Error: ${result.error}</span>`;
+                }
+            } catch (error) {
+                messageDiv.innerHTML = `<span style="color: red;">Network error: ${error.message}</span>`;
+            }
+        }
+
+        async function refreshFileList() {
+            try {
+                const response = await fetch('/api/uploads');
+                const result = await response.json();
+                
+                const fileList = document.getElementById('file-list');
+                const videoSelect = document.getElementById('video-select');
+                
+                // Clear existing content
+                fileList.innerHTML = '';
+                videoSelect.innerHTML = '<option value="">Select a video...</option>';
+                
+                if (result.files && result.files.length > 0) {
+                    result.files.forEach(file => {
+                        // Add to file list display
+                        const fileItem = document.createElement('div');
+                        fileItem.className = 'file-item';
+                        fileItem.innerHTML = `
+                            <div class="file-info">
+                                <div class="file-name">${file.filename}</div>
+                                <div class="file-size">${formatFileSize(file.size)}</div>
+                            </div>
+                            <button class="button danger" onclick="deleteFile('${file.filename}')">Delete</button>
+                        `;
+                        fileList.appendChild(fileItem);
+                        
+                        // Add to video select dropdown
+                        const option = document.createElement('option');
+                        option.value = file.filename;
+                        option.textContent = file.filename;
+                        videoSelect.appendChild(option);
+                    });
+                } else {
+                    fileList.innerHTML = '<p>No videos uploaded yet.</p>';
+                }
+            } catch (error) {
+                console.error('Error refreshing file list:', error);
+            }
+        }
+
+        async function deleteFile(filename) {
+            if (!confirm(`Delete ${filename}?`)) return;
+            
+            try {
+                const response = await fetch(`/api/uploads/${filename}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    refreshFileList();
+                    loadStatus();
+                } else {
+                    alert(`Error deleting file: ${result.error}`);
+                }
+            } catch (error) {
+                alert(`Network error: ${error.message}`);
+            }
+        }
+
+        async function loadStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                updateStatus(data);
+                refreshFileList();
+            } catch (error) {
+                console.error('Error loading status:', error);
+            }
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            loadStatus();
+        });
+    </script>
+</body>
+</html>

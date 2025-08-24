@@ -1,0 +1,60 @@
+FROM vm/ubuntu:20.04
+
+# Set non-interactive mode
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Update and install dependencies
+RUN apt-get update
+RUN apt-get install -y curl wget gnupg git python3 python3-pip
+
+# Install Node.js 18
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+RUN apt-get install -y nodejs
+
+# Install Chrome for browser automation (if needed for token extraction)
+RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add -
+RUN echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+RUN apt-get update
+RUN apt-get install -y google-chrome-stable
+
+# Copy your repository files
+COPY . /app
+WORKDIR /app
+
+# Install Python dependencies
+RUN pip3 install -r requirements.txt
+
+# Install Node.js dependencies for TikTok signature
+WORKDIR /app/tiktok_uploader/tiktok-signature
+RUN npm install
+
+# Go back to app directory
+WORKDIR /app
+
+# Create necessary directories that the Python CLI expects
+RUN mkdir -p VideosDirPath
+RUN mkdir -p CookiesDir
+RUN mkdir -p uploads
+RUN mkdir -p logs
+
+# Create web interface directory structure
+RUN mkdir -p web-interface
+RUN mkdir -p web-interface/public
+
+# Copy web interface files to the correct locations
+COPY /workspace/uploads/package_json.json /app/web-interface/package.json
+COPY /workspace/uploads/server_js.js /app/web-interface/server.js  
+COPY /workspace/uploads/index_html.html /app/web-interface/public/index.html
+
+# Install web interface dependencies
+WORKDIR /app/web-interface
+RUN npm install
+
+# Go back to app directory
+WORKDIR /app
+
+# Start the web interface in background
+RUN BACKGROUND cd /app/web-interface && node server.js
+
+# Expose the web interface
+EXPOSE WEBSITE http://localhost:3000
